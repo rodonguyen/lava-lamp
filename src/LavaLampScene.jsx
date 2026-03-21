@@ -28,7 +28,7 @@ function createBlobs() {
       pos: new THREE.Vector3(
         Math.cos(angle) * r,
         yBase + (Math.random() - 0.5) * 0.3,
-        Math.sin(angle) * r * 0.25
+        Math.sin(angle) * r
       ),
       vel: new THREE.Vector3(0, 0, 0),
       radius: baseRadius,
@@ -39,6 +39,8 @@ function createBlobs() {
       phase: Math.random() * Math.PI * 2,
       phaseSpeed: 0.15 + Math.random() * 0.3,
       temperature: i < 4 ? 0.7 + Math.random() * 0.3 : 0.1 + Math.random() * 0.3,
+      orbitSpeed: (0.08 + Math.random() * 0.12) * (i % 2 === 0 ? 1 : -1),
+      driftSeed: Math.random() * 1000,
     })
   }
   return blobs
@@ -61,13 +63,29 @@ function updateBlobs(blobs, dt, time, count, speedCfg) {
     b.vel.y += buoyancy * dt
     b.vel.y -= 0.15 * dt
 
-    const drag = Math.max(1 - dragCoeff * dt, 0)
-    b.vel.multiplyScalar(drag)
+    // Anisotropic drag: lateral persists longer than vertical
+    const dragY = Math.max(1 - dragCoeff * dt, 0)
+    const dragXZ = Math.max(1 - dragCoeff * 0.5 * dt, 0)
+    b.vel.x *= dragXZ
+    b.vel.y *= dragY
+    b.vel.z *= dragXZ
 
-    b.vel.x += Math.sin(time * 0.15 + b.phase) * 0.04 * dt
-    b.vel.z += Math.cos(time * 0.2 + b.phase * 1.3) * 0.02 * dt
-    b.vel.x += Math.sin(time * 0.08 + b.phase * 2.7) * 0.03 * dt
-    b.vel.z += Math.cos(time * 0.11 + b.phase * 3.1) * 0.015 * dt
+    // Orbital drift — tangential force perpendicular to radial direction
+    const distXZPre = Math.sqrt(b.pos.x * b.pos.x + b.pos.z * b.pos.z)
+    if (distXZPre > 0.05) {
+      const rFactor = Math.min(distXZPre / CYL_R, 1.0)
+      const orbStrength = 0.15 * buoyancyMul * rFactor
+      const rnx = b.pos.x / distXZPre
+      const rnz = b.pos.z / distXZPre
+      // tangent = perpendicular to radial in XZ plane
+      b.vel.x += -rnz * b.orbitSpeed * orbStrength * dt
+      b.vel.z += rnx * b.orbitSpeed * orbStrength * dt
+    }
+
+    // Perlin-like layered wobble — equal X and Z strength
+    const s = b.driftSeed
+    b.vel.x += (Math.sin(time * 0.07 + s) * 0.04 + Math.sin(time * 0.19 + s * 1.7) * 0.03 + Math.sin(time * 0.13 + s * 2.3) * 0.03) * dt
+    b.vel.z += (Math.cos(time * 0.09 + s * 0.8) * 0.04 + Math.cos(time * 0.17 + s * 1.4) * 0.03 + Math.cos(time * 0.11 + s * 2.9) * 0.03) * dt
 
     b.radius = (b.baseRadius + Math.sin(time * b.radiusSpeed + b.radiusPhase) * b.radiusAmp) * radiusScale
 
@@ -80,8 +98,12 @@ function updateBlobs(blobs, dt, time, count, speedCfg) {
       const nz = b.pos.z / distXZ
       b.pos.x = nx * maxR
       b.pos.z = nz * maxR
-      b.vel.x *= -0.1
-      b.vel.z *= -0.1
+      // Wall sliding: remove only outward radial component, preserve tangential
+      const radialVel = b.vel.x * nx + b.vel.z * nz
+      if (radialVel > 0) {
+        b.vel.x -= radialVel * 1.1 * nx
+        b.vel.z -= radialVel * 1.1 * nz
+      }
     }
 
     const capMargin = b.radius * 0.3
@@ -106,7 +128,7 @@ function updateBlobs(blobs, dt, time, count, speedCfg) {
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
       const minDist = (a.radius + b.radius) * 0.6
       if (dist < minDist && dist > 0.001) {
-        const force = (minDist - dist) * 0.3 * dt
+        const force = (minDist - dist) * 1.5 * dt
         const nx = dx / dist, ny = dy / dist, nz = dz / dist
         a.vel.x += nx * force; a.vel.y += ny * force; a.vel.z += nz * force
         b.vel.x -= nx * force; b.vel.y -= ny * force; b.vel.z -= nz * force
