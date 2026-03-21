@@ -2,6 +2,7 @@ import React, { useRef, useMemo, useEffect } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
+import { OrbitControls } from '@react-three/drei'
 
 // ── Blob physics ──────────────────────────────────────────
 const MAX_BLOBS = 20
@@ -529,6 +530,17 @@ export default function LavaLampScene({ palette, settings }) {
           depthTest={false}
         />
       </mesh>
+      <OrbitControls
+        enablePan={false}
+        enableDamping
+        dampingFactor={0.08}
+        minDistance={4}
+        maxDistance={16}
+        minPolarAngle={Math.PI * 0.15}  // don't go too far above
+        maxPolarAngle={Math.PI * 0.65}  // don't go below the ground
+        rotateSpeed={0.5}
+        zoomSpeed={0.8}
+      />
       <EffectComposer>
         <Bloom
           intensity={settings.bloomIntensity}
