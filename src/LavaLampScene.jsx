@@ -4,18 +4,25 @@ import * as THREE from 'three'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 
 // ── Blob physics ──────────────────────────────────────────
-const NUM_BLOBS = 6
+const MAX_BLOBS = 20
 const CYL_R = 0.65
 const CYL_H = 1.7 // half-height
 
+const SPEED_MAP = {
+  slow:   { buoyancyMul: 0.6, dragCoeff: 4.5 },
+  medium: { buoyancyMul: 1.0, dragCoeff: 3.5 },
+  fast:   { buoyancyMul: 1.6, dragCoeff: 2.5 },
+}
+const GOOEY_MAP = { low: 0.18, medium: 0.35, high: 0.55 }
+const BG_MAP = { dark: 1.0, darker: 0.4, pitch: 0.0 }
+
 function createBlobs() {
   const blobs = []
-  for (let i = 0; i < NUM_BLOBS; i++) {
+  for (let i = 0; i < MAX_BLOBS; i++) {
     const angle = Math.random() * Math.PI * 2
     const r = Math.random() * 0.15
-    // Most blobs start near bottom (like real lava lamp warming up)
-    const yBase = -CYL_H + 0.3 + Math.pow(i / (NUM_BLOBS - 1), 1.5) * CYL_H * 1.8
-    const baseRadius = 0.22 + Math.random() * 0.14  // much fatter blobs (0.22-0.36)
+    const yBase = -CYL_H + 0.3 + Math.pow(i / (MAX_BLOBS - 1), 1.5) * CYL_H * 1.8
+    const baseRadius = 0.22 + Math.random() * 0.14
     blobs.push({
       pos: new THREE.Vector3(
         Math.cos(angle) * r,
@@ -30,45 +37,41 @@ function createBlobs() {
       radiusPhase: Math.random() * Math.PI * 2,
       phase: Math.random() * Math.PI * 2,
       phaseSpeed: 0.15 + Math.random() * 0.3,
-      temperature: i < 3 ? 0.7 + Math.random() * 0.3 : 0.1 + Math.random() * 0.3,
+      temperature: i < 4 ? 0.7 + Math.random() * 0.3 : 0.1 + Math.random() * 0.3,
     })
   }
   return blobs
 }
 
-function updateBlobs(blobs, dt, time) {
-  for (const b of blobs) {
-    // Temperature: heats at bottom, cools at top (gradual)
+function updateBlobs(blobs, dt, time, count, speedCfg) {
+  const { buoyancyMul, dragCoeff } = speedCfg
+  // Scale radii so more blobs = smaller each (normalized to 6 blobs)
+  const radiusScale = Math.sqrt(6 / count)
+
+  for (let idx = 0; idx < count; idx++) {
+    const b = blobs[idx]
     const heatZone = THREE.MathUtils.smoothstep(-b.pos.y, -0.3, CYL_H)
     const coolZone = THREE.MathUtils.smoothstep(b.pos.y, CYL_H * 0.2, CYL_H)
     b.temperature += heatZone * 0.6 * dt
     b.temperature -= coolZone * 0.8 * dt
     b.temperature = THREE.MathUtils.clamp(b.temperature, 0, 1)
 
-    // Buoyancy — lazy, heavy feel
-    const buoyancy = (b.temperature - 0.42) * 1.2
+    const buoyancy = (b.temperature - 0.42) * 1.2 * buoyancyMul
     b.vel.y += buoyancy * dt
-
-    // Gentle gravity
     b.vel.y -= 0.15 * dt
 
-    // Heavy viscous drag — makes movement oozy
-    const drag = Math.max(1 - 3.5 * dt, 0)
+    const drag = Math.max(1 - dragCoeff * dt, 0)
     b.vel.multiplyScalar(drag)
 
-    // Very slow organic wobble
     b.vel.x += Math.sin(time * 0.15 + b.phase) * 0.04 * dt
     b.vel.z += Math.cos(time * 0.2 + b.phase * 1.3) * 0.02 * dt
     b.vel.x += Math.sin(time * 0.08 + b.phase * 2.7) * 0.03 * dt
     b.vel.z += Math.cos(time * 0.11 + b.phase * 3.1) * 0.015 * dt
 
-    // Oscillate radius for organic pulsing
-    b.radius = b.baseRadius + Math.sin(time * b.radiusSpeed + b.radiusPhase) * b.radiusAmp
+    b.radius = (b.baseRadius + Math.sin(time * b.radiusSpeed + b.radiusPhase) * b.radiusAmp) * radiusScale
 
-    // Integrate
     b.pos.addScaledVector(b.vel, dt)
 
-    // Wall collision — soft push (blobs squish against glass)
     const distXZ = Math.sqrt(b.pos.x * b.pos.x + b.pos.z * b.pos.z)
     const maxR = CYL_R - b.radius * 0.3
     if (distXZ > maxR && distXZ > 0.001) {
@@ -80,7 +83,6 @@ function updateBlobs(blobs, dt, time) {
       b.vel.z *= -0.1
     }
 
-    // Cap collision — very soft bounce
     const capMargin = b.radius * 0.3
     if (b.pos.y < -CYL_H + capMargin) {
       b.pos.y = -CYL_H + capMargin
@@ -94,10 +96,8 @@ function updateBlobs(blobs, dt, time) {
     }
   }
 
-  // Blob-to-blob repulsion — prevents them all collapsing into one mass
-  // but keeps them close enough to form gooey bridges
-  for (let i = 0; i < blobs.length; i++) {
-    for (let j = i + 1; j < blobs.length; j++) {
+  for (let i = 0; i < count; i++) {
+    for (let j = i + 1; j < count; j++) {
       const a = blobs[i], b = blobs[j]
       const dx = a.pos.x - b.pos.x
       const dy = a.pos.y - b.pos.y
@@ -132,7 +132,10 @@ uniform float uTime;
 uniform vec2 uResolution;
 uniform vec3 uCameraPos;
 uniform mat4 uInvProjView;
-uniform vec4 uBlobs[6];
+uniform vec4 uBlobs[20];
+uniform int uBlobCount;
+uniform float uSminK;
+uniform float uBgBrightness;
 uniform vec3 uBlobColor;
 uniform vec3 uGlowColor;
 
@@ -157,7 +160,6 @@ float sdTorus(vec3 p, float R, float r) {
   return length(q) - r;
 }
 
-// Smooth min for organic blob merging
 float smin(float a, float b, float k) {
   float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
   return mix(b, a, h) - k * h * (1.0 - h);
@@ -166,48 +168,43 @@ float smin(float a, float b, float k) {
 // ── Scene SDFs ────────────────────────────────────────
 float blobsSDF(vec3 p) {
   float d = sdSphere(p, uBlobs[0].xyz, uBlobs[0].w);
-  for (int i = 1; i < 6; i++) {
+  for (int i = 1; i < 20; i++) {
+    if (i >= uBlobCount) break;
     float s = sdSphere(p, uBlobs[i].xyz, uBlobs[i].w);
-    // High smin k = gooey, ropy bridges between blobs
-    float k = 0.35 + 0.12 * sin(uTime * 0.15 + float(i) * 2.1);
+    float k = uSminK + 0.12 * sin(uTime * 0.15 + float(i) * 2.1);
     d = smin(d, s, k);
   }
-  // Fat pool at the bottom — blobs merge into it
   float pool = sdSphere(p, vec3(0.0, -1.85, 0.0), 0.50);
-  d = smin(d, pool, 0.40);
+  d = smin(d, pool, uSminK + 0.05);
   return d;
 }
 
-// Clip blobs to inside cylinder
 float clippedBlobs(vec3 p) {
   float blobs = blobsSDF(p);
   float cyl = sdCylinder(p, 0.62, 1.7);
   return max(blobs, cyl);
 }
 
-// Metal base (no glass SDF — glass is handled analytically)
 float baseSDF(vec3 p) {
-  // Bottom cap - wider
   vec3 pb = p - vec3(0.0, -1.88, 0.0);
   float base = sdCappedCylinder(pb, 0.85, 0.18);
-  // Bottom ring
   float ring = sdTorus(p - vec3(0.0, -1.72, 0.0), 0.72, 0.04);
   float d = min(base, ring);
-  // Top cap
   vec3 pt = p - vec3(0.0, 1.88, 0.0);
   float topCap = sdCappedCylinder(pt, 0.78, 0.14);
   d = min(d, topCap);
-  // Top ring
   float topRing = sdTorus(p - vec3(0.0, 1.75, 0.0), 0.72, 0.04);
   d = min(d, topRing);
   return d;
 }
 
+// Ground plane
+float groundSDF(vec3 p) {
+  return p.y + 2.10;
+}
+
 // ── Ray-cylinder intersection (analytical, for glass) ──
-// Returns (tNear, tFar) for a cylinder of radius r, height h centered at origin
-// Returns (-1, -1) if no hit
 vec2 intersectGlassCylinder(vec3 ro, vec3 rd, float r, float h) {
-  // Intersect infinite cylinder in XZ
   float a = rd.x * rd.x + rd.z * rd.z;
   float b = 2.0 * (ro.x * rd.x + ro.z * rd.z);
   float c = ro.x * ro.x + ro.z * ro.z - r * r;
@@ -218,7 +215,6 @@ vec2 intersectGlassCylinder(vec3 ro, vec3 rd, float r, float h) {
   float t0 = (-b - sqrtDisc) / (2.0 * a);
   float t1 = (-b + sqrtDisc) / (2.0 * a);
 
-  // Clip to height
   float y0 = ro.y + rd.y * t0;
   float y1 = ro.y + rd.y * t1;
 
@@ -229,7 +225,7 @@ vec2 intersectGlassCylinder(vec3 ro, vec3 rd, float r, float h) {
   return vec2(t0, t1);
 }
 
-// ── Ray marching (blobs + metal only, no glass) ──────
+// ── Ray marching ──────────────────────────────────────
 vec3 calcNormal(vec3 p, int material) {
   const float e = 0.001;
   if (material == 1) {
@@ -238,6 +234,8 @@ vec3 calcNormal(vec3 p, int material) {
       clippedBlobs(p + vec3(0,e,0)) - clippedBlobs(p - vec3(0,e,0)),
       clippedBlobs(p + vec3(0,0,e)) - clippedBlobs(p - vec3(0,0,e))
     ));
+  } else if (material == 4) {
+    return vec3(0.0, 1.0, 0.0);
   } else {
     return normalize(vec3(
       baseSDF(p + vec3(e,0,0)) - baseSDF(p - vec3(e,0,0)),
@@ -247,14 +245,16 @@ vec3 calcNormal(vec3 p, int material) {
   }
 }
 
-// Scene SDF: 1=blob, 3=metal (no glass in SDF)
+// 1=blob, 3=metal, 4=ground
 vec2 sceneSDF(vec3 p) {
   float dBlob = clippedBlobs(p);
   float dBase = baseSDF(p);
+  float dGround = groundSDF(p);
 
   float d = dBlob;
   float mat = 1.0;
   if (dBase < d) { d = dBase; mat = 3.0; }
+  if (dGround < d) { d = dGround; mat = 4.0; }
   return vec2(d, mat);
 }
 
@@ -280,15 +280,11 @@ vec3 shadeBlob(vec3 p, vec3 rd, vec3 n) {
   float diff = max(dot(n, L), 0.0);
   float spec = pow(max(dot(n, H), 0.0), 40.0);
   float fresnel = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-
-  // Subsurface scattering
   float sss = max(0.0, dot(V, -L)) * 0.5;
 
-  // Height gradient
   float hFactor = smoothstep(-1.8, 1.8, p.y);
   vec3 baseCol = mix(uBlobColor, uGlowColor, hFactor * 0.4 + 0.15);
 
-  // Second light from above
   vec3 L2 = normalize(vec3(0.5, 2.0, 0.5) - p);
   float diff2 = max(dot(n, L2), 0.0) * 0.3;
 
@@ -297,7 +293,6 @@ vec3 shadeBlob(vec3 p, vec3 rd, vec3 n) {
   col += vec3(1.0) * spec * 0.4;
   col += baseCol * fresnel * 0.25;
 
-  // Inner glow
   float glow = exp(-blobsSDF(p) * 5.0);
   col += uGlowColor * glow * 0.25;
 
@@ -307,22 +302,18 @@ vec3 shadeBlob(vec3 p, vec3 rd, vec3 n) {
 vec3 shadeMetal(vec3 p, vec3 rd, vec3 n) {
   vec3 V = -rd;
 
-  // Primary light
   vec3 L1 = normalize(vec3(-1.0, 1.0, 2.0));
   vec3 H1 = normalize(L1 + V);
   float diff1 = max(dot(n, L1), 0.0);
   float spec1 = pow(max(dot(n, H1), 0.0), 60.0);
 
-  // Second light for better definition
   vec3 L2 = normalize(vec3(1.5, -0.5, 1.0));
   vec3 H2 = normalize(L2 + V);
   float diff2 = max(dot(n, L2), 0.0);
   float spec2 = pow(max(dot(n, H2), 0.0), 80.0);
 
-  // Environment reflection approximation (matcap-style)
   vec3 refl = reflect(rd, n);
   float envUp = max(refl.y, 0.0);
-  float envDown = max(-refl.y, 0.0);
   vec3 envCol = mix(vec3(0.03, 0.03, 0.05), vec3(0.08, 0.08, 0.12), envUp);
 
   vec3 metalCol = vec3(0.15, 0.15, 0.17);
@@ -330,13 +321,30 @@ vec3 shadeMetal(vec3 p, vec3 rd, vec3 n) {
   col += envCol * 0.3;
   col += vec3(0.4) * spec1 + vec3(0.25) * spec2;
 
-  // Warm glow from lava on bottom cap
   float bottomFace = 1.0 - smoothstep(-2.1, -1.5, p.y);
   col += uGlowColor * 0.15 * bottomFace;
 
-  // Subtle top cap reflection
   float topFace = smoothstep(1.5, 2.1, p.y);
   col += vec3(0.04) * topFace;
+
+  return col;
+}
+
+vec3 shadeGround(vec3 p, vec3 rd, vec3 n) {
+  vec3 groundCol = vec3(0.025, 0.025, 0.03);
+
+  vec3 L = normalize(vec3(-1.0, 1.0, 2.0));
+  float diff = max(dot(n, L), 0.0);
+  vec3 col = groundCol * (diff * 0.3 + 0.1);
+
+  // Colored light pool from lava lamp
+  float distFromCenter = length(p.xz);
+  float lampLight = exp(-distFromCenter * distFromCenter * 1.2);
+  col += uGlowColor * lampLight * 0.1;
+
+  // Fade to black at edges
+  float fade = smoothstep(2.5, 6.0, distFromCenter);
+  col *= 1.0 - fade;
 
   return col;
 }
@@ -345,33 +353,31 @@ void main() {
   vec2 uv = vUv * 2.0 - 1.0;
   uv.x *= uResolution.x / uResolution.y;
 
-  // Build ray from camera
   vec3 ro = uCameraPos;
   vec3 forward = normalize(-ro);
   vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
   vec3 up = cross(right, forward);
 
-  // FOV factor (~60 degrees total) — wider so lamp fits on phone screens
   float fov = tan(radians(30.0));
   vec3 rd = normalize(forward + uv.x * right * fov + uv.y * up * fov);
 
-  // ── Glass intersection (analytical, not SDF) ──────
+  // ── Glass intersection ──────────────────────────────
   float glassR = 0.72;
   float glassH = 1.73;
   vec2 glassTimes = intersectGlassCylinder(ro, rd, glassR, glassH);
   float glassNear = glassTimes.x;
   float glassFar = glassTimes.y;
 
-  // ── Ray march scene (blobs + metal) ───────────────
+  // ── Ray march scene ─────────────────────────────────
   vec2 hit = rayMarch(ro, rd);
 
-  // ── Background ────────────────────────────────────
+  // ── Background ──────────────────────────────────────
   vec3 bgCol;
   {
     float vignette = 1.0 - length(vUv - 0.5) * 1.0;
-    bgCol = vec3(0.015, 0.015, 0.03) * vignette;
+    bgCol = vec3(0.015, 0.015, 0.03) * uBgBrightness * vignette;
     float lampGlow = exp(-length(uv) * 1.8) * 0.05;
-    bgCol += uGlowColor * lampGlow;
+    bgCol += uGlowColor * lampGlow * uBgBrightness;
   }
 
   vec3 col = bgCol;
@@ -384,20 +390,20 @@ void main() {
 
     if (mat == 1) {
       col = shadeBlob(p, rd, n);
+    } else if (mat == 4) {
+      col = shadeGround(p, rd, n);
     } else {
       col = shadeMetal(p, rd, n);
     }
   }
 
-  // ── Glass post-pass: Fresnel edges + specular glints ──
+  // ── Glass post-pass ─────────────────────────────────
   if (glassNear > 0.0) {
     vec3 pGlass = ro + rd * glassNear;
-    // Cylinder normal (outward in XZ)
     vec3 nGlass = normalize(vec3(pGlass.x, 0.0, pGlass.z));
     vec3 V = -rd;
     float fresnel = pow(1.0 - abs(dot(nGlass, V)), 5.0);
 
-    // Specular highlights on glass
     vec3 L1 = normalize(vec3(-2.0, 1.5, 3.0));
     vec3 H1 = normalize(L1 + V);
     float spec1 = pow(max(dot(nGlass, H1), 0.0), 120.0);
@@ -406,21 +412,17 @@ void main() {
     vec3 H2 = normalize(L2 + V);
     float spec2 = pow(max(dot(nGlass, H2), 0.0), 100.0);
 
-    // Add glass effects on top (very subtle)
     vec3 glassEffect = vec3(0.0);
     glassEffect += vec3(0.12, 0.12, 0.15) * fresnel * 0.5;
     glassEffect += vec3(1.0) * (spec1 * 0.5 + spec2 * 0.3);
 
-    // Only apply glass if the hit is behind or at the glass
     if (hitDist < 0.0 || glassNear < hitDist) {
       col += glassEffect;
     } else {
-      // Glass is in front of the object but object was hit — add subtle edge
       col += glassEffect * 0.4;
     }
   }
 
-  // Far side glass edge (exit point)
   if (glassFar > 0.0 && (hitDist < 0.0 || glassFar > hitDist)) {
     vec3 pGlassFar = ro + rd * glassFar;
     vec3 nGlassFar = -normalize(vec3(pGlassFar.x, 0.0, pGlassFar.z));
@@ -428,24 +430,21 @@ void main() {
     col += vec3(0.06, 0.06, 0.08) * fresnelFar * 0.3;
   }
 
-  // ── Liquid medium inside cylinder ─────────────────
+  // ── Liquid medium ───────────────────────────────────
   if (glassNear > 0.0 || glassFar > 0.0) {
     float tStart = max(glassNear, 0.001);
     float tEnd = glassFar > 0.0 ? glassFar : tStart + 4.0;
     if (hitDist > 0.0 && hitDist < tEnd) tEnd = hitDist;
     float thickness = max(tEnd - tStart, 0.0);
 
-    // Sample midpoint for height-based color
     vec3 midP = ro + rd * ((tStart + tEnd) * 0.5);
     float heightFactor = smoothstep(-1.8, 1.8, midP.y);
 
-    // Warm at bottom, neutral at top
     vec3 liquidTint = mix(uGlowColor * 0.08, vec3(0.02, 0.02, 0.03), heightFactor);
     float fogAmount = 1.0 - exp(-thickness * 0.3);
     col = mix(col, col + liquidTint, fogAmount);
   }
 
-  // Tone mapping
   col = col / (col + vec3(1.0));
   col = pow(col, vec3(0.85));
 
@@ -454,7 +453,7 @@ void main() {
 `
 
 // ── React Component ───────────────────────────────────────
-export default function LavaLampScene({ palette }) {
+export default function LavaLampScene({ palette, settings }) {
   const meshRef = useRef()
   const blobsRef = useRef(createBlobs())
   const targetColorRef = useRef({ blob: [...palette.blob], glow: [...palette.glow] })
@@ -467,13 +466,15 @@ export default function LavaLampScene({ palette }) {
     uCameraPos: { value: new THREE.Vector3(0, 0, 8.0) },
     uInvProjView: { value: new THREE.Matrix4() },
     uBlobs: {
-      value: Array.from({ length: NUM_BLOBS }, () => new THREE.Vector4(0, 0, 0, 0.15))
+      value: Array.from({ length: MAX_BLOBS }, () => new THREE.Vector4(0, -100, 0, 0.15))
     },
+    uBlobCount: { value: 6 },
+    uSminK: { value: 0.35 },
+    uBgBrightness: { value: 1.0 },
     uBlobColor: { value: new THREE.Vector3(...palette.blob) },
     uGlowColor: { value: new THREE.Vector3(...palette.glow) },
   }), [])
 
-  // Update palette target when it changes
   useEffect(() => {
     targetColorRef.current = { blob: [...palette.blob], glow: [...palette.glow] }
   }, [palette])
@@ -481,22 +482,30 @@ export default function LavaLampScene({ palette }) {
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05)
     const time = state.clock.elapsedTime
+    const count = settings.blobCount
+    const speedCfg = SPEED_MAP[settings.speed]
 
-    // Update blob physics
     const blobs = blobsRef.current
-    updateBlobs(blobs, dt, time)
+    updateBlobs(blobs, dt, time, count, speedCfg)
 
-    // Sync to uniforms
     const u = meshRef.current.material.uniforms
-    for (let i = 0; i < NUM_BLOBS; i++) {
-      u.uBlobs.value[i].set(blobs[i].pos.x, blobs[i].pos.y, blobs[i].pos.z, blobs[i].radius)
+
+    // Upload active blobs; park inactive ones far away
+    for (let i = 0; i < MAX_BLOBS; i++) {
+      if (i < count) {
+        u.uBlobs.value[i].set(blobs[i].pos.x, blobs[i].pos.y, blobs[i].pos.z, blobs[i].radius)
+      } else {
+        u.uBlobs.value[i].set(0, -100, 0, 0.01)
+      }
     }
 
+    u.uBlobCount.value = count
+    u.uSminK.value = GOOEY_MAP[settings.gooeyness]
+    u.uBgBrightness.value = BG_MAP[settings.bgBrightness]
     u.uTime.value = time
     u.uResolution.value.set(state.size.width, state.size.height)
     u.uCameraPos.value.copy(camera.position)
 
-    // Smooth color lerp
     const cur = currentColorRef.current
     const tgt = targetColorRef.current
     const lerpSpeed = 3.0 * dt
@@ -522,7 +531,7 @@ export default function LavaLampScene({ palette }) {
       </mesh>
       <EffectComposer>
         <Bloom
-          intensity={1.2}
+          intensity={settings.bloomIntensity}
           luminanceThreshold={0.4}
           luminanceSmoothing={0.9}
           radius={0.6}

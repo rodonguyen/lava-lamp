@@ -1,8 +1,7 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 
 const SPEED_OPTIONS = ['slow', 'medium', 'fast']
 const GOOEY_OPTIONS = ['low', 'medium', 'high']
-const BLOB_OPTIONS = [4, 6, 8]
 const BG_OPTIONS = ['dark', 'darker', 'pitch']
 
 function PillGroup({ options, value, onChange, labels }) {
@@ -23,6 +22,7 @@ function PillGroup({ options, value, onChange, labels }) {
 
 export default function SettingsMenu({ settings, updateSetting, palettes }) {
   const [open, setOpen] = useState(false)
+  const closeTimer = useRef(null)
 
   const handleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -32,12 +32,20 @@ export default function SettingsMenu({ settings, updateSetting, palettes }) {
     }
   }, [])
 
-  // Touch device fallback: click to toggle instead of hover
   const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches
+
+  const handleEnter = () => {
+    clearTimeout(closeTimer.current)
+    setOpen(true)
+  }
+
+  const handleLeave = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 400)
+  }
 
   const containerProps = isTouchDevice
     ? {}
-    : { onMouseEnter: () => setOpen(true), onMouseLeave: () => setOpen(false) }
+    : { onMouseEnter: handleEnter, onMouseLeave: handleLeave }
 
   const gearClick = isTouchDevice ? () => setOpen(o => !o) : undefined
 
@@ -102,12 +110,15 @@ export default function SettingsMenu({ settings, updateSetting, palettes }) {
 
           {/* Blob count */}
           <div className="settings-row">
-            <span className="settings-label">Blobs</span>
-            <PillGroup
-              options={BLOB_OPTIONS}
+            <span className="settings-label">Blobs ({settings.blobCount})</span>
+            <input
+              type="range"
+              className="settings-slider"
+              min="2"
+              max="20"
+              step="1"
               value={settings.blobCount}
-              onChange={v => updateSetting('blobCount', v)}
-              labels={['4', '6', '8']}
+              onChange={e => updateSetting('blobCount', parseInt(e.target.value))}
             />
           </div>
 
