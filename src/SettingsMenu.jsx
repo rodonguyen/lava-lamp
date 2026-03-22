@@ -73,24 +73,6 @@ export default function SettingsMenu({ settings, updateSetting, palettes, waterP
             </div>
           </div>
 
-          {/* Water Palette */}
-          <div className="settings-row">
-            <span className="settings-label">Water</span>
-            <div className="swatch-group">
-              {waterPalettes.map((w, i) => (
-                <button
-                  key={w.name}
-                  className={`swatch ${settings.waterPaletteIdx === i ? 'swatch-active' : ''}`}
-                  style={{
-                    background: `rgb(${w.color.map(v => Math.round(Math.min(v * 4, 1) * 255)).join(',')})`,
-                  }}
-                  onClick={() => updateSetting('waterPaletteIdx', i)}
-                  title={w.name}
-                />
-              ))}
-            </div>
-          </div>
-
           {/* Bottom Light */}
           <div className="settings-row">
             <span className="settings-label">Bottom Light</span>
@@ -119,7 +101,25 @@ export default function SettingsMenu({ settings, updateSetting, palettes, waterP
             />
           </div>
 
-          {/* Water */}
+          {/* Water Palette */}
+          <div className="settings-row">
+            <span className="settings-label">Water</span>
+            <div className="swatch-group">
+              {waterPalettes.map((w, i) => (
+                <button
+                  key={w.name}
+                  className={`swatch ${settings.waterPaletteIdx === i ? 'swatch-active' : ''}`}
+                  style={{
+                    background: `rgb(${w.color.map(v => Math.round(Math.min(v * 4, 1) * 255)).join(',')})`,
+                  }}
+                  onClick={() => updateSetting('waterPaletteIdx', i)}
+                  title={w.name}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Water Strength */}
           <div className="settings-row">
             <span className="settings-label">Water</span>
             <input

@@ -368,10 +368,11 @@ vec3 shadeMetal(vec3 p, vec3 rd, vec3 n) {
   float envUp = max(refl.y, 0.0);
   vec3 envCol = mix(vec3(0.02, 0.02, 0.03), vec3(0.05, 0.05, 0.08), envUp);
 
-  vec3 metalCol = vec3(0.12, 0.12, 0.14);
-  vec3 col = metalCol * (diff1 * 0.4 + diff2 * 0.15 + 0.15);
-  col += envCol * 0.2;
-  col += vec3(0.3) * spec1 + vec3(0.15) * spec2;
+  // Smoke black metal
+  vec3 metalCol = vec3(0.04, 0.04, 0.045);
+  vec3 col = metalCol * (diff1 * 0.5 + diff2 * 0.2 + 0.12);
+  col += envCol * 0.15;
+  col += vec3(0.2) * spec1 + vec3(0.12) * spec2;
 
   // Subtle warm white glow on bottom face — no colored light bleed
   float bottomFace = 1.0 - smoothstep(-2.1, -1.5, p.y);
@@ -381,7 +382,7 @@ vec3 shadeMetal(vec3 p, vec3 rd, vec3 n) {
   float topFace = smoothstep(1.5, 2.1, p.y);
   vec3 Ltop = normalize(vec3(0.3, 1.0, 0.8));
   float diffTop = max(dot(n, Ltop), 0.0);
-  col += metalCol * (diffTop * 0.5 + 0.3) * topFace;
+  col += metalCol * (diffTop * 0.6 + 0.25) * topFace;
 
   // Inside face of top cap — tinted with palette glow color, within glass radius only
   float topInside = smoothstep(1.6, 1.85, p.y);
