@@ -18,8 +18,8 @@ export default function App() {
     bloomIntensity: 1.2,
     speed: 'medium',
     gooeyness: 'medium',
-    blobCount: 6,
-    bgBrightness: 'dark',
+    blobCount: 10,
+    bgBrightness: 'pitch',
   })
 
   const updateSetting = useCallback((key, value) => {
