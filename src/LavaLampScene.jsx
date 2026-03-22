@@ -515,11 +515,11 @@ void main() {
 `
 
 // ── React Component ───────────────────────────────────────
-export default function LavaLampScene({ palette, settings }) {
+export default function LavaLampScene({ palette, waterPalette, settings }) {
   const meshRef = useRef()
   const blobsRef = useRef(createBlobs())
-  const targetColorRef = useRef({ bottom: [...palette.bottom], top: [...palette.top], water: [...palette.water] })
-  const currentColorRef = useRef({ bottom: [...palette.bottom], top: [...palette.top], water: [...palette.water] })
+  const targetColorRef = useRef({ bottom: [...palette.bottom], top: [...palette.top], water: [...waterPalette.color] })
+  const currentColorRef = useRef({ bottom: [...palette.bottom], top: [...palette.top], water: [...waterPalette.color] })
   const { size, camera } = useThree()
 
   const uniforms = useMemo(() => ({
@@ -537,13 +537,13 @@ export default function LavaLampScene({ palette, settings }) {
     uBottomLight: { value: 1.0 },
     uTopLightColor: { value: new THREE.Vector3(...palette.top) },
     uBottomLightColor: { value: new THREE.Vector3(...palette.bottom) },
-    uWaterColor: { value: new THREE.Vector3(...palette.water) },
+    uWaterColor: { value: new THREE.Vector3(...waterPalette.color) },
     uWaterStrength: { value: 0.5 },
   }), [])
 
   useEffect(() => {
-    targetColorRef.current = { bottom: [...palette.bottom], top: [...palette.top], water: [...palette.water] }
-  }, [palette])
+    targetColorRef.current = { bottom: [...palette.bottom], top: [...palette.top], water: [...waterPalette.color] }
+  }, [palette, waterPalette])
 
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05)
