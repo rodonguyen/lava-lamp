@@ -17,7 +17,7 @@ export default function App() {
     paletteIdx: 0,
     bloomIntensity: 1.2,
     speed: 'medium',
-    gooeyness: 'medium',
+    gooeyness: 0.26,
     blobCount: 10,
     bgBrightness: 'pitch',
   })
@@ -40,6 +40,27 @@ export default function App() {
         updateSetting={updateSetting}
         palettes={PALETTES}
       />
+      <div style={{
+        position: 'fixed',
+        bottom: 12,
+        left: 0,
+        right: 0,
+        textAlign: 'center',
+        color: 'rgba(255,255,255,0.35)',
+        fontSize: 13,
+        fontFamily: 'sans-serif',
+        pointerEvents: 'auto',
+      }}>
+        Made for fun by{' '}
+        <a
+          href="https://rodonguyen.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'underline' }}
+        >
+          Rodo
+        </a>
+      </div>
     </>
   )
 }

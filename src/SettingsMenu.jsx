@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react'
 
 const SPEED_OPTIONS = ['slow', 'medium', 'fast']
-const GOOEY_OPTIONS = ['low', 'medium', 'high']
 const BG_OPTIONS = ['dark', 'darker', 'pitch']
 
 function PillGroup({ options, value, onChange, labels }) {
@@ -101,10 +100,14 @@ export default function SettingsMenu({ settings, updateSetting, palettes }) {
           {/* Gooeyness */}
           <div className="settings-row">
             <span className="settings-label">Gooey</span>
-            <PillGroup
-              options={GOOEY_OPTIONS}
+            <input
+              type="range"
+              className="settings-slider"
+              min="0.18"
+              max="0.35"
+              step="0.01"
               value={settings.gooeyness}
-              onChange={v => updateSetting('gooeyness', v)}
+              onChange={e => updateSetting('gooeyness', parseFloat(e.target.value))}
             />
           </div>
 

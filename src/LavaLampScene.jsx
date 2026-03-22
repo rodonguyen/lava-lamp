@@ -14,7 +14,6 @@ const SPEED_MAP = {
   medium: { buoyancyMul: 1.0, dragCoeff: 3.5 },
   fast:   { buoyancyMul: 1.6, dragCoeff: 2.5 },
 }
-const GOOEY_MAP = { low: 0.18, medium: 0.35, high: 0.55 }
 const BG_MAP = { dark: 1.0, darker: 0.4, pitch: 0.0 }
 
 function createBlobs() {
@@ -362,9 +361,9 @@ vec3 shadeMetal(vec3 p, vec3 rd, vec3 n) {
   col += envCol * 0.2;
   col += vec3(0.3) * spec1 + vec3(0.15) * spec2;
 
-  // Bottom glow from lamp light — stronger
+  // Subtle warm white glow on bottom face — no colored light bleed
   float bottomFace = 1.0 - smoothstep(-2.1, -1.5, p.y);
-  col += uGlowColor * 0.25 * bottomFace;
+  col += vec3(0.06, 0.05, 0.04) * bottomFace;
 
   float topFace = smoothstep(1.5, 2.1, p.y);
   col += vec3(0.02) * topFace;
@@ -448,15 +447,15 @@ void main() {
     // Glass specular — subtle, from below-ish angles
     vec3 L1 = normalize(vec3(-1.0, -1.5, 2.5));
     vec3 H1 = normalize(L1 + V);
-    float spec1 = pow(max(dot(nGlass, H1), 0.0), 120.0);
+    float spec1 = pow(max(dot(nGlass, H1), 0.0), 200.0);
 
     vec3 L2 = normalize(vec3(1.5, -0.5, 2.0));
     vec3 H2 = normalize(L2 + V);
-    float spec2 = pow(max(dot(nGlass, H2), 0.0), 100.0);
+    float spec2 = pow(max(dot(nGlass, H2), 0.0), 180.0);
 
     vec3 glassEffect = vec3(0.0);
     glassEffect += vec3(0.08, 0.08, 0.10) * fresnel * 0.4;
-    glassEffect += vec3(1.0) * (spec1 * 0.3 + spec2 * 0.2);
+    glassEffect += vec3(1.0) * (spec1 * 0.12 + spec2 * 0.08);
 
     if (hitDist < 0.0 || glassNear < hitDist) {
       col += glassEffect;
@@ -511,7 +510,7 @@ export default function LavaLampScene({ palette, settings }) {
       value: Array.from({ length: MAX_BLOBS }, () => new THREE.Vector4(0, -100, 0, 0.15))
     },
     uBlobCount: { value: 10 },
-    uSminK: { value: 0.35 },
+    uSminK: { value: 0.26 },
     uBgBrightness: { value: 1.0 },
     uBlobColor: { value: new THREE.Vector3(...palette.blob) },
     uGlowColor: { value: new THREE.Vector3(...palette.glow) },
@@ -542,7 +541,7 @@ export default function LavaLampScene({ palette, settings }) {
     }
 
     u.uBlobCount.value = count
-    u.uSminK.value = GOOEY_MAP[settings.gooeyness]
+    u.uSminK.value = settings.gooeyness
     u.uBgBrightness.value = BG_MAP[settings.bgBrightness]
     u.uTime.value = time
     u.uResolution.value.set(state.size.width, state.size.height)
