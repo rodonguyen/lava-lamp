@@ -73,6 +73,15 @@ export default function App() {
         >
           Rodo
         </a>
+        {' | '}
+        <a
+          href="https://github.com/rodonguyen/lava-lamp"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'underline' }}
+        >
+          GitHub repo
+        </a>, fork or contributions welcome!
       </div>
     </>
   )
