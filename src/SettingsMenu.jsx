@@ -64,7 +64,7 @@ export default function SettingsMenu({ settings, updateSetting, palettes }) {
                   key={p.name}
                   className={`swatch ${settings.paletteIdx === i ? 'swatch-active' : ''}`}
                   style={{
-                    background: `rgb(${p.blob.map(v => Math.round(v * 255)).join(',')})`,
+                    background: `rgb(${p.bottom.map(v => Math.round(v * 255)).join(',')})`,
                   }}
                   onClick={() => updateSetting('paletteIdx', i)}
                   title={p.name}
@@ -73,17 +73,45 @@ export default function SettingsMenu({ settings, updateSetting, palettes }) {
             </div>
           </div>
 
-          {/* Bloom */}
+          {/* Bottom Light */}
           <div className="settings-row">
-            <span className="settings-label">Bloom</span>
+            <span className="settings-label">Bottom Light</span>
             <input
               type="range"
               className="settings-slider"
               min="0"
-              max="3"
+              max="2"
               step="0.1"
-              value={settings.bloomIntensity}
-              onChange={e => updateSetting('bloomIntensity', parseFloat(e.target.value))}
+              value={settings.bottomLight}
+              onChange={e => updateSetting('bottomLight', parseFloat(e.target.value))}
+            />
+          </div>
+
+          {/* Top Light */}
+          <div className="settings-row">
+            <span className="settings-label">Top Light</span>
+            <input
+              type="range"
+              className="settings-slider"
+              min="0"
+              max="2"
+              step="0.1"
+              value={settings.topLight}
+              onChange={e => updateSetting('topLight', parseFloat(e.target.value))}
+            />
+          </div>
+
+          {/* Water */}
+          <div className="settings-row">
+            <span className="settings-label">Water</span>
+            <input
+              type="range"
+              className="settings-slider"
+              min="0"
+              max="2"
+              step="0.1"
+              value={settings.waterStrength}
+              onChange={e => updateSetting('waterStrength', parseFloat(e.target.value))}
             />
           </div>
 

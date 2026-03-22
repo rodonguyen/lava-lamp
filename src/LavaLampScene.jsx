@@ -168,8 +168,12 @@ uniform vec4 uBlobs[20];
 uniform int uBlobCount;
 uniform float uSminK;
 uniform float uBgBrightness;
-uniform vec3 uBlobColor;
-uniform vec3 uGlowColor;
+uniform float uTopLight;
+uniform float uBottomLight;
+uniform vec3 uTopLightColor;
+uniform vec3 uBottomLightColor;
+uniform vec3 uWaterColor;
+uniform float uWaterStrength;
 
 // ── SDF primitives ────────────────────────────────────
 float sdSphere(vec3 p, vec3 c, float r) {
@@ -320,19 +324,27 @@ vec3 shadeBlob(vec3 p, vec3 rd, vec3 n) {
   float sss = max(0.0, dot(V, -L)) * 0.5;
 
   float hFactor = smoothstep(-1.8, 1.8, p.y);
-  vec3 baseCol = mix(uBlobColor, uGlowColor, hFactor * 0.4 + 0.15);
+  vec3 baseCol = mix(uBottomLightColor, uTopLightColor, hFactor * 0.4 + 0.15);
 
-  // Very faint top fill — mostly just prevents total blackness on top surfaces
-  vec3 L2 = normalize(vec3(0.0, 2.0, 0.5) - p);
-  float diff2 = max(dot(n, L2), 0.0) * 0.08;
+  // Top-down light from top metal cap — shines downward onto upward-facing surfaces
+  vec3 topLightPos = vec3(0.0, 1.85, 0.0);
+  vec3 Lt = normalize(topLightPos - p);
+  float diffTop = max(dot(n, Lt), 0.0);
+  float topDist = length(topLightPos - p);
+  float attenTop = 1.0 / (1.0 + topDist * 0.4);
+  float topLight = diffTop * uTopLight * attenTop;
 
-  vec3 col = baseCol * (diff * atten * 1.1 + diff2 + 0.08);
-  col += uGlowColor * sss * 0.5 * atten;
+  // Bottom light uses its color, top light uses its color
+  vec3 col = baseCol * (diff * atten * uBottomLight + 0.08);
+  col += uBottomLightColor * diff * atten * uBottomLight * 0.3;
+  col += uTopLightColor * topLight * 0.5;
+  col += baseCol * topLight;
+  col += uBottomLightColor * sss * 0.5 * atten * uBottomLight;
   col += vec3(1.0) * spec * 0.3 * atten;
   col += baseCol * fresnel * 0.2;
 
   float glow = exp(-blobsSDF(p) * 5.0);
-  col += uGlowColor * glow * 0.3 * atten;
+  col += uBottomLightColor * glow * 0.3 * atten * uBottomLight;
 
   return col;
 }
@@ -365,8 +377,17 @@ vec3 shadeMetal(vec3 p, vec3 rd, vec3 n) {
   float bottomFace = 1.0 - smoothstep(-2.1, -1.5, p.y);
   col += vec3(0.06, 0.05, 0.04) * bottomFace;
 
+  // Top cap — lit from above so it reads as solid
   float topFace = smoothstep(1.5, 2.1, p.y);
-  col += vec3(0.02) * topFace;
+  vec3 Ltop = normalize(vec3(0.3, 1.0, 0.8));
+  float diffTop = max(dot(n, Ltop), 0.0);
+  col += metalCol * (diffTop * 0.5 + 0.3) * topFace;
+
+  // Inside face of top cap — tinted with palette glow color, within glass radius only
+  float topInside = smoothstep(1.6, 1.85, p.y);
+  float facingDown = max(-n.y, 0.0);
+  float withinGlass = 1.0 - smoothstep(0.55, 0.64, length(p.xz));
+  col += uTopLightColor * uTopLight * 0.4 * topInside * facingDown * withinGlass;
 
   return col;
 }
@@ -380,7 +401,7 @@ vec3 shadeGround(vec3 p, vec3 rd, vec3 n) {
   // Colored light pool from lava lamp bottom — this is the main ground illumination
   float distFromCenter = length(p.xz);
   float lampLight = exp(-distFromCenter * distFromCenter * 1.5);
-  col += uGlowColor * lampLight * 0.15;
+  col += uBottomLightColor * lampLight * 0.15 * uBottomLight;
 
   // Fade to black at edges
   float fade = smoothstep(2.0, 5.0, distFromCenter);
@@ -417,7 +438,7 @@ void main() {
     float vignette = 1.0 - length(vUv - 0.5) * 1.0;
     bgCol = vec3(0.015, 0.015, 0.03) * uBgBrightness * vignette;
     float lampGlow = exp(-length(uv) * 1.8) * 0.05;
-    bgCol += uGlowColor * lampGlow * uBgBrightness;
+    bgCol += uBottomLightColor * lampGlow * uBgBrightness;
   }
 
   vec3 col = bgCol;
@@ -481,9 +502,9 @@ void main() {
     vec3 midP = ro + rd * ((tStart + tEnd) * 0.5);
     float heightFactor = smoothstep(-1.8, 1.8, midP.y);
 
-    vec3 liquidTint = mix(uGlowColor * 0.08, vec3(0.02, 0.02, 0.03), heightFactor);
-    float fogAmount = 1.0 - exp(-thickness * 0.3);
-    col = mix(col, col + liquidTint, fogAmount);
+    vec3 liquidTint = mix(uWaterColor * 0.15, uWaterColor * 0.03, heightFactor);
+    float fogAmount = 1.0 - exp(-thickness * 0.3) * (1.0 - uWaterStrength * 0.5);
+    col = mix(col, col + liquidTint * uWaterStrength, fogAmount);
   }
 
   col = col / (col + vec3(1.0));
@@ -497,8 +518,8 @@ void main() {
 export default function LavaLampScene({ palette, settings }) {
   const meshRef = useRef()
   const blobsRef = useRef(createBlobs())
-  const targetColorRef = useRef({ blob: [...palette.blob], glow: [...palette.glow] })
-  const currentColorRef = useRef({ blob: [...palette.blob], glow: [...palette.glow] })
+  const targetColorRef = useRef({ bottom: [...palette.bottom], top: [...palette.top], water: [...palette.water] })
+  const currentColorRef = useRef({ bottom: [...palette.bottom], top: [...palette.top], water: [...palette.water] })
   const { size, camera } = useThree()
 
   const uniforms = useMemo(() => ({
@@ -512,12 +533,16 @@ export default function LavaLampScene({ palette, settings }) {
     uBlobCount: { value: 10 },
     uSminK: { value: 0.26 },
     uBgBrightness: { value: 1.0 },
-    uBlobColor: { value: new THREE.Vector3(...palette.blob) },
-    uGlowColor: { value: new THREE.Vector3(...palette.glow) },
+    uTopLight: { value: 0.7 },
+    uBottomLight: { value: 1.0 },
+    uTopLightColor: { value: new THREE.Vector3(...palette.top) },
+    uBottomLightColor: { value: new THREE.Vector3(...palette.bottom) },
+    uWaterColor: { value: new THREE.Vector3(...palette.water) },
+    uWaterStrength: { value: 0.5 },
   }), [])
 
   useEffect(() => {
-    targetColorRef.current = { blob: [...palette.blob], glow: [...palette.glow] }
+    targetColorRef.current = { bottom: [...palette.bottom], top: [...palette.top], water: [...palette.water] }
   }, [palette])
 
   useFrame((state, delta) => {
@@ -541,6 +566,8 @@ export default function LavaLampScene({ palette, settings }) {
     }
 
     u.uBlobCount.value = count
+    u.uTopLight.value = settings.topLight
+    u.uBottomLight.value = settings.bottomLight
     u.uSminK.value = settings.gooeyness
     u.uBgBrightness.value = BG_MAP[settings.bgBrightness]
     u.uTime.value = time
@@ -551,11 +578,14 @@ export default function LavaLampScene({ palette, settings }) {
     const tgt = targetColorRef.current
     const lerpSpeed = 3.0 * dt
     for (let i = 0; i < 3; i++) {
-      cur.blob[i] += (tgt.blob[i] - cur.blob[i]) * lerpSpeed
-      cur.glow[i] += (tgt.glow[i] - cur.glow[i]) * lerpSpeed
+      cur.bottom[i] += (tgt.bottom[i] - cur.bottom[i]) * lerpSpeed
+      cur.top[i] += (tgt.top[i] - cur.top[i]) * lerpSpeed
+      cur.water[i] += (tgt.water[i] - cur.water[i]) * lerpSpeed
     }
-    u.uBlobColor.value.set(cur.blob[0], cur.blob[1], cur.blob[2])
-    u.uGlowColor.value.set(cur.glow[0], cur.glow[1], cur.glow[2])
+    u.uBottomLightColor.value.set(cur.bottom[0], cur.bottom[1], cur.bottom[2])
+    u.uTopLightColor.value.set(cur.top[0], cur.top[1], cur.top[2])
+    u.uWaterColor.value.set(cur.water[0], cur.water[1], cur.water[2])
+    u.uWaterStrength.value = settings.waterStrength
   })
 
   return (

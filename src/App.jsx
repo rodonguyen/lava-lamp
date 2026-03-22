@@ -5,17 +5,20 @@ import SettingsMenu from './SettingsMenu'
 import './styles.css'
 
 const PALETTES = [
-  { name: 'Classic', blob: [1.0, 0.2, 0.0],   glow: [1.0, 0.53, 0.0] },
-  { name: 'Ocean',   blob: [0.0, 0.53, 1.0],  glow: [0.0, 1.0, 0.8] },
-  { name: 'Toxic',   blob: [0.27, 1.0, 0.0],  glow: [0.67, 1.0, 0.0] },
-  { name: 'Cosmic',  blob: [0.67, 0.0, 1.0],  glow: [1.0, 0.0, 0.67] },
-  { name: 'Ember',   blob: [1.0, 0.4, 0.0],   glow: [1.0, 0.8, 0.0] },
+  { name: 'Classic', bottom: [1.0, 0.2, 0.0],   top: [1.0, 0.53, 0.0],  water: [0.15, 0.05, 0.0] },
+  { name: 'Ocean',   bottom: [0.0, 0.53, 1.0],  top: [0.0, 1.0, 0.8],   water: [0.0, 0.1, 0.2] },
+  { name: 'Toxic',   bottom: [0.27, 1.0, 0.0],  top: [0.67, 1.0, 0.0],  water: [0.05, 0.15, 0.0] },
+  { name: 'Cosmic',  bottom: [0.67, 0.0, 1.0],  top: [1.0, 0.0, 0.67],  water: [0.1, 0.0, 0.15] },
+  { name: 'Ember',   bottom: [1.0, 0.4, 0.0],   top: [1.0, 0.8, 0.0],   water: [0.15, 0.06, 0.0] },
 ]
 
 export default function App() {
   const [settings, setSettings] = useState({
     paletteIdx: 0,
     bloomIntensity: 1.2,
+    topLight: 0.7,
+    bottomLight: 1.0,
+    waterStrength: 0.5,
     speed: 'medium',
     gooeyness: 0.26,
     blobCount: 10,

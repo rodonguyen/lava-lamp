@@ -126,6 +126,34 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; background: #08
   border-color: rgba(255,255,255,0.35);
 }
 
+/* Color picker */
+.settings-color {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.settings-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.settings-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+.settings-color::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
 /* Slider */
 .settings-slider {
   width: 120px;
